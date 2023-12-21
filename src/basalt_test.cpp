@@ -20,13 +20,13 @@ std::vector<std::shared_ptr<Sophus::SE3d>> readPoses(std::string fn)
         return poses;
     }
 
-    unsigned secs, nsecs;
+    std::string t;
     double x, y, z;
     double qx, qy, qz, qw;
     char ch;
 
     size_t nlines = 0;
-    while (file >> secs >> ch >> nsecs >> ch >> x >> ch >> y >> ch >> z >> ch >> qw >> ch >> qx >> ch >> qy >> ch >> qz)
+    while (file >> t >> x >> y >> z >> qw >> qx >> qy >> qz)
     {
         nlines++;
         std::shared_ptr<Sophus::SE3d> pose_ptr(new Sophus::SE3d(Eigen::Quaterniond(qw, qx, qy, qz), Eigen::Vector3d(x, y, z)));

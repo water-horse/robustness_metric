@@ -32,7 +32,7 @@ std::vector<std::shared_ptr<Sophus::SE3d>> readPoses(std::string fn)
         std::shared_ptr<Sophus::SE3d> pose_ptr(new Sophus::SE3d(Eigen::Quaterniond(qw, qx, qy, qz), Eigen::Vector3d(x, y, z)));
         poses.push_back(pose_ptr);
     }
-    std::cout << "Read " << nlines << " lines from file " << fn << std::endl;
+    // std::cout << "Read " << nlines << " lines from file " << fn << std::endl;
 
     file.close();
 
@@ -51,6 +51,8 @@ void estimate_v(long interv_ns, std::vector<std::shared_ptr<Sophus::SE3d>> & pos
 
     std::vector<std::shared_ptr<Sophus::SE3d>> poses_deriv;
     int n_poses = poses.size();
+
+    // std::cout << "99999999999" << std::endl;
 
     arma::mat linear_v_x(n_poses - 6, 1);
     arma::mat linear_v_y(n_poses - 6, 1);
@@ -71,9 +73,13 @@ void estimate_v(long interv_ns, std::vector<std::shared_ptr<Sophus::SE3d>> & pos
         angular_v_z(i - 3) = angular_v(2);
     }
 
+    // std::cout << "88888888888888" << std::endl;
+
     arma::cx_mat linear_v_x_freq = arma::fft(linear_v_x);
     arma::cx_mat linear_v_y_freq = arma::fft(linear_v_y);
     arma::cx_mat linear_v_z_freq = arma::fft(linear_v_z);
+
+    // std::cout << "7777777777777" << std::endl;
 
     for (arma::uword i = linear_v_x_freq.n_elem / keep_freq; i < linear_v_x_freq.n_elem; i++) {
         linear_v_x_freq(i) = 0;
@@ -85,9 +91,13 @@ void estimate_v(long interv_ns, std::vector<std::shared_ptr<Sophus::SE3d>> & pos
         linear_v_z_freq(i) = 0;
     }
 
+    // std::cout << "6666666666" << std::endl;
+
     linear_v_x = arma::real(arma::ifft(linear_v_x_freq));
     linear_v_y = arma::real(arma::ifft(linear_v_y_freq));
     linear_v_z = arma::real(arma::ifft(linear_v_z_freq));
+
+    // std::cout << "55555555555555" << std::endl;
 
     arma::cx_mat angular_v_x_freq = arma::fft(angular_v_x);
     arma::cx_mat angular_v_y_freq = arma::fft(angular_v_y);
@@ -108,7 +118,7 @@ void estimate_v(long interv_ns, std::vector<std::shared_ptr<Sophus::SE3d>> & pos
     angular_v_z = arma::real(arma::ifft(angular_v_z_freq));
 
     for (size_t i = 0; i < n_poses - 6; i++) {
-        rot_deriv.push_back(std::shared_ptr<Eigen::Vector3d>(new Eigen::Vector3d(0.0, 0.0, 0.0)));
+        rot_deriv.push_back(std::shared_ptr<Eigen::Vector3d>(new Eigen::Vector3d(angular_v_x(i), angular_v_y(i), angular_v_z(i))));
         trans_deriv.push_back(std::shared_ptr<Eigen::Vector3d>(new Eigen::Vector3d(linear_v_x(i), linear_v_y(i), linear_v_z(i))));
     }
 }
@@ -129,7 +139,7 @@ void calc_fscore(
 
     while (1)
     {
-        if (index < trans_deriv1.size() && index < rot_deriv1.size())
+        if (index < trans_deriv1.size() && index < rot_deriv1.size() && index < trans_deriv2.size() && index < rot_deriv2.size())
         {
             double x1 = (*(trans_deriv1[index]))(0);
             double y1 = (*(trans_deriv1[index]))(1);
@@ -153,6 +163,7 @@ void calc_fscore(
             {
                 rot_num++;
             }
+            // std::cout << "rot_val " << rot_val << std::endl;
         } else {
             break;
         }
@@ -178,15 +189,16 @@ void calc_fscore(
 
 int main(int argc, char **argv)
 {
-    if (argc != 6)
+    if (argc != 8)
     {
-        std::cout << "Usage: " << argv[0] << " [/path/to/input/poses/file1] [/path/to/input/poses/file2] [argument controlling low pass filter] [translation robustness threshold] [rotation robustness threshold]" << std::endl;
+        std::cout << "Usage: " << argv[0] << " [/path/to/input/poses/file1] [/path/to/input/poses/file2] [argument controlling low pass filter] [sampling interval ns] [threshold start (inclusive)] [threshold end (inclusive)] [threshold interval]" << std::endl;
         return 0;
-    } else {
-        std::cout << "Using " << argv[1] << " as the input poses file1" << std::endl;
-        std::cout << "Using " << argv[2] << " as the input poses file2" << std::endl;
-        std::cout << "Keeping first 1/" << argv[3] << " in the frequency domain" << std::endl;
     }
+    // else {
+    //     std::cout << "Using " << argv[1] << " as the input poses file1" << std::endl;
+    //     std::cout << "Using " << argv[2] << " as the input poses file2" << std::endl;
+    //     std::cout << "Keeping first 1/" << argv[3] << " in the frequency domain" << std::endl;
+    // }
 
     std::vector<std::shared_ptr<Sophus::SE3d>> poses1 = readPoses(std::string(argv[1]));
 
@@ -195,26 +207,61 @@ int main(int argc, char **argv)
     std::vector<std::shared_ptr<Eigen::Vector3d>> trans_deriv1;
     std::vector<std::shared_ptr<Eigen::Vector3d>> rot_deriv1;
 
-    estimate_v(200000000L, poses1, std::stoi(argv[3]), trans_deriv1, rot_deriv1);
+    // std::cout << "1111111111" << std::endl;
+    // estimate_v(200000000L, poses1, std::stoi(argv[3]), trans_deriv1, rot_deriv1);
+    estimate_v(std::stol(argv[4]), poses1, std::stoi(argv[3]), trans_deriv1, rot_deriv1);
 
     std::vector<std::shared_ptr<Eigen::Vector3d>> trans_deriv2;
     std::vector<std::shared_ptr<Eigen::Vector3d>> rot_deriv2;
 
-    estimate_v(200000000L, poses2, std::stoi(argv[3]), trans_deriv2, rot_deriv2);
+    // std::cout << "2222222222" << std::endl;
+    // estimate_v(200000000L, poses2, std::stoi(argv[3]), trans_deriv2, rot_deriv2);
+    estimate_v(std::stol(argv[4]), poses2, std::stoi(argv[3]), trans_deriv2, rot_deriv2);
 
-
+    // std::cout << "3333333333" << std::endl;
     size_t size = rot_deriv1.size();
 
-    double trans_threshold = std::stod(argv[4]);
-    double rot_threshold = std::stod(argv[5]);
-    std::cout << "Translation robustness threshold is " << trans_threshold << std::endl;
-    std::cout << "Rotation robustness threshold is " << rot_threshold << std::endl;
+    // double fscore_trans, fscore_rot;
+    // for (int i = 1; i <= 20; i++)
+    // {
+    //     calc_fscore(trans_deriv1, rot_deriv1, trans_deriv2, rot_deriv2, i * 0.005, 1000, &fscore_trans, &fscore_rot);
+    //     std::cout << fscore_trans << " ";
+    // }
+    // std::cout << std::endl;
 
     double fscore_trans, fscore_rot;
-    calc_fscore(trans_deriv1, rot_deriv1, trans_deriv2, rot_deriv2, trans_threshold, rot_threshold, &fscore_trans, &fscore_rot);
+    double threshold_start = std::stod(argv[5]);
+    double threshold_end = std::stod(argv[6]);
+    double threshold_interval = std::stod(argv[7]);
+    double fscore_area_trans, fscore_area_rot;
+    std::vector<double> fscore_transes;
+    std::vector<double> fscore_rots;
+    int num = 0;
+    for (double threshold = threshold_start; threshold <= threshold_end + 1e-5; threshold += threshold_interval)
+    {
+        calc_fscore(trans_deriv1, rot_deriv1, trans_deriv2, rot_deriv2, threshold, threshold, &fscore_trans, &fscore_rot);
+        double x_axis_len = exp(-10.0*(threshold-threshold_interval*0.5))-exp(-10.0*(threshold+threshold_interval*0.5));
+        fscore_area_trans += fscore_trans*x_axis_len;
+        fscore_area_rot += fscore_rot*x_axis_len;
+        fscore_transes.push_back(fscore_trans);
+        fscore_rots.push_back(fscore_rot);
+        num++;
+    }
+    std::cout << fscore_area_trans << ", ";
+    for (int i = 0; i < num; i++)
+    {
+        std::cout << fscore_transes[i] << ", ";
+    }
+    std::cout << std::endl;
+    std::cout << fscore_area_rot << ", ";
+    for (int i = 0; i < num; i++)
+    {
+        std::cout << fscore_rots[i] << ", ";
+    }
+    std::cout << std::endl;
 
-    std::cout << "Translation robustness score is " << fscore_trans << std::endl;
-    std::cout << "Rotation robustness score is " << fscore_rot << std::endl;
+    // std::cout << "Translation robustness score is " << fscore_trans << std::endl;
+    // std::cout << "Rotation robustness score is " << fscore_rot << std::endl;
 
     return 0;
 }
